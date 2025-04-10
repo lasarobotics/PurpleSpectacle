@@ -1,0 +1,180 @@
+import tkinter as tk
+
+import PIL
+from cv2.typing import Scalar
+from mpl_toolkits.mplot3d.art3d import math
+from mpl_toolkits.mplot3d.axes3d import textwrap
+import spectacularAI
+import depthai
+import threading
+from matplotlib.backends.backend_tkagg import (
+    FigureCanvasTkAgg)
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image, ImageTk
+import cv2
+
+
+#UI
+window = tk.Tk() 
+dataframe = tk.Frame(window)
+vframe = tk.Frame(window)
+# iframe = tk.Frame(window)
+
+dataframe.pack(side=tk.LEFT)
+vframe.pack()
+
+tlabel = tk.Label(dataframe, font=('Arial', 24))
+tlabel.pack()
+
+tlabel = tk.Label(dataframe, text="Translation:", font=('Arial', 24))
+txlabel = tk.Label(dataframe, text="x: 0", font=('Arial', 24))
+tylabel = tk.Label(dataframe, text="y: 0", font=('Arial', 24))
+tzlabel = tk.Label(dataframe, text="z: 0", font=('Arial', 24))
+
+tlabel.pack()
+txlabel.pack()
+tylabel.pack()
+tzlabel.pack()
+
+rlabel = tk.Label(dataframe, text="Rotation:", font=('Arial', 24))
+rxlabel = tk.Label(dataframe, text="x: 0", font=('Arial', 24))
+rylabel = tk.Label(dataframe, text="y: 0", font=('Arial', 24))
+rzlabel = tk.Label(dataframe, text="z: 0", font=('Arial', 24))
+
+rlabel.pack()
+rxlabel.pack()
+rylabel.pack()
+rzlabel.pack()
+
+v1label = tk.Label(vframe) 
+v1label.pack()
+
+#<graph>
+fig = plt.figure()
+ax = Axes3D(fig)
+fig.add_axes(ax)
+
+data = { c: [] for c in 'xyz' }
+
+ax_bounds = (-3, 3) # meters
+ax.set(xlim=ax_bounds, ylim=ax_bounds, zlim=ax_bounds)
+ax.view_init(azim=-140) # initial plot orientation
+vio_plot = ax.plot(
+    xs=[], ys=[], zs=[],
+    linestyle="-",
+    marker=""
+)
+ax.set_xlabel("x (m)")
+ax.set_ylabel("y (m)")
+ax.set_zlabel("z (m)")
+
+title = ax.set_title("VIO trajectory")
+canvas = FigureCanvasTkAgg(fig, master=vframe)  # A tk.DrawingArea.
+canvas.draw()
+canvas.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+
+def update_data(vio_out):
+        # supports two slightly different JSONL formats
+        if 'pose' in vio_out: vio_out = vio_out['pose']
+        # SDK < 0.12 does not expose the TRACKING status
+        is_tracking = vio_out.get('status', 'TRACKING') == 'TRACKING'
+        for c in 'xyz':
+            val = vio_out['position'][c]
+            if not is_tracking: val = np.nan
+            data[c].append(val)
+        return True
+
+def update_graph(frames):
+        x, y, z = [np.array(data[c]) for c in 'xyz']
+        vio_plot[0].set_data(x, y)
+        vio_plot[0].set_3d_properties(z)
+        return (vio_plot[0],)
+
+from matplotlib.animation import FuncAnimation
+anim = FuncAnimation(fig, update_graph, interval=15, blit=True)
+#</graph>
+
+#camera
+pipeline = depthai.Pipeline()
+
+vio_pipeline = spectacularAI.depthai.Pipeline(pipeline)
+
+features = []
+image = None
+
+# def updateImage():
+#     image
+#     v1label.config(image=todo)
+#
+
+def onImageFactor(name):
+    def onImage(img):
+        if img.getWidth() <= 0 or img.getHeight() <= 0:
+            # When SLAM is enabled, monocular frames are only used at 1/6th of normal frame rate,
+            # rest of the frames are [0,0] in size and must be filtered
+            return
+
+        new = Image.fromarray(img.getCvFrame())
+
+        if img != ImageTk.PhotoImage:
+            global image
+            image = ImageTk.PhotoImage(new)
+            v1label.config(image=image)
+
+        if (image.width() != new.width):
+            print("imconfig change")
+            v1label.config(image=image)
+
+        image.paste(new)
+        
+    return onImage
+
+vio_pipeline.hooks.monoPrimary = onImageFactor("Primary")
+
+# def onFeatures(featurebuf):
+#     if type(featurebuf) is not np.ndarray: return
+#     featurebuf[:] = 0
+#     features = featurebuf
+#
+    # for feature in features.trackedFeatures:
+    #     cv2.circle(features, (int(feature.position.x), int(feature.position.y)), 2, , -1, cv2.LINE_AA, 0)
+    # cv2.imshow("Features", featureBuffer)
+    # if cv2.waitKey(1) == ord("q"):
+    #     exit(0)
+    #
+
+device = depthai.Device(pipeline)
+vio_session = vio_pipeline.startSession(device)
+
+def camloop():
+    import json
+    while True:
+        out = vio_session.waitForOutput()
+        data = json.loads(out.asJson())
+
+
+        tlabel.config(text=f"Tracking: {data.get('status', "TRACKING")}")
+
+        txlabel.config(text=f"x: {str(data["position"]['x'])}")
+        tylabel.config(text=f"y: {data["position"]['y']}")
+        tzlabel.config(text=f"z: {data["position"]['z']}")
+
+        rxlabel.config(text=f"x: {data["orientation"]['x']}")
+        rylabel.config(text=f"y: {data["orientation"]['y']}")
+        rzlabel.config(text=f"z: {data["orientation"]['z']}")
+
+        update_data(data)
+
+        
+
+    
+thread = threading.Thread(target=camloop)
+# threads.append(thread)
+thread.start()
+
+window.mainloop()
+thread.join()
+
