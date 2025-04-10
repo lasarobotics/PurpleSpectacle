@@ -6,4 +6,5 @@ matplotlib
 depthai
 Pillow
 spectacularai
+numpy
 (might have missed one, in a hurry right now)
