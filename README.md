@@ -1,5 +1,7 @@
 A visualizer for spectacular ai on oakd cameras.
 
+I'm very early and testing, and the code is quite janky since I did it all in a morning.
+
 Deps: 
 opevcv
 matplotlib
