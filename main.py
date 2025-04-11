@@ -118,33 +118,42 @@ vio_pipeline = spectacularAI.depthai.Pipeline(pipeline)
 #| 0 0 -1 0.0541 |
 #| 0 0 0 1 |
 
-#Hey Viggy, if you see this then I forgot to put a check here. comment this out
-vio_pipeline.imuToCameraLeft = [
-    [
-        0.9993864566531208,
-        0.002608506818609768,
-        0.03492715205248295,
-        0.004358885459078838
-    ],
-    [
-        0.0033711974751103025,
-        -0.9997567647621044,
-        -0.02179555780417905,
-        0.0002560060614699508
-    ],
-    [
-        0.034861802677196824,
-        0.021899931611508897,
-        -0.9991521644421877,
-        0.0018364413451974568
-    ],
-    [
-        0.0,
-        0.0,
-        0.0,
-        1.0
+device = depthai.Device(pipeline)
+calib = device.readCalibration()
+eeprom = calib.getEepromData()
+
+pname = eeprom.productName
+print(pname)
+
+#check for oak d lite, spectacular does not support by default so we need to do some extra work.
+if pname == "OAK-D-LITE":
+    vio_pipeline.imuToCameraLeft = [
+        [
+            0.9993864566531208,
+            0.002608506818609768,
+            0.03492715205248295,
+            0.004358885459078838
+        ],
+        [
+            0.0033711974751103025,
+            -0.9997567647621044,
+            -0.02179555780417905,
+            0.0002560060614699508
+        ],
+        [
+            0.034861802677196824,
+            0.021899931611508897,
+            -0.9991521644421877,
+            0.0018364413451974568
+        ],
+        [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+        ]
     ]
-]
+    print("Using Oak D lite imu matrix")
 
 features = []
 image = None
@@ -200,18 +209,17 @@ def onImuData(imuData):
         gyroTs = gyroValues.getTimestampDevice().total_seconds() * 1000
         imuF = "{:.06f}"
         tsF  = "{:.03f}"
-        print(f"Accelerometer timestamp: {tsF.format(acceleroTs)} ms")
-        print(f"Accelerometer [m/s^2]: x: {imuF.format(acceleroValues.x)} y: {imuF.format(acceleroValues.y)} z: {imuF.format(acceleroValues.z)}")
-        print(f"Gyroscope timestamp: {tsF.format(gyroTs)} ms")
-        print(f"Gyroscope [rad/s]: x: {imuF.format(gyroValues.x)} y: {imuF.format(gyroValues.y)} z: {imuF.format(gyroValues.z)} ")
-        
+        # print(f"Accelerometer timestamp: {tsF.format(acceleroTs)} ms")
+        # print(f"Accelerometer [m/s^2]: x: {imuF.format(acceleroValues.x)} y: {imuF.format(acceleroValues.y)} z: {imuF.format(acceleroValues.z)}")
+        # print(f"Gyroscope timestamp: {tsF.format(gyroTs)} ms")
+        # print(f"Gyroscope [rad/s]: x: {imuF.format(gyroValues.x)} y: {imuF.format(gyroValues.y)} z: {imuF.format(gyroValues.z)} ")
+        #
         gxlabel.config(text=f"x: {imuF.format(gyroValues.x)} rad/s")
         gylabel.config(text=f"y: {imuF.format(gyroValues.y)} rad/s")
         gzlabel.config(text=f"z: {imuF.format(gyroValues.z)} rad/s")
 
 vio_pipeline.hooks.imu = onImuData
 
-device = depthai.Device(pipeline)
 vio_session = vio_pipeline.startSession(device)
 
 def camloop():
