@@ -222,6 +222,28 @@ vio_pipeline.hooks.imu = onImuData
 
 vio_session = vio_pipeline.startSession(device)
 
+def euler_from_quaternion(x, y, z, w):
+        """
+        Convert a quaternion into euler angles (roll, pitch, yaw)
+        roll is rotation around x in radians (counterclockwise)
+        pitch is rotation around y in radians (counterclockwise)
+        yaw is rotation around z in radians (counterclockwise)
+        """
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll_x = math.atan2(t0, t1)
+     
+        t2 = +2.0 * (w * y - z * x)
+        t2 = +1.0 if t2 > +1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        pitch_y = math.asin(t2)
+     
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw_z = math.atan2(t3, t4)
+     
+        return roll_x, pitch_y, yaw_z # in radians
+
 def camloop():
     import json
     while True:
@@ -231,17 +253,19 @@ def camloop():
 
         tlabel.config(text=f"Tracking: {data.get('status', "TRACKING")}")
 
-        txlabel.config(text=f"x: {str(data["position"]['x'])}")
+        txlabel.config(text=f"x: {data["position"]['x']}")
         tylabel.config(text=f"y: {data["position"]['y']}")
         tzlabel.config(text=f"z: {data["position"]['z']}")
 
-        rxlabel.config(text=f"x: {data["orientation"]['x']}")
-        rylabel.config(text=f"y: {data["orientation"]['y'] * (180/pi)}")
-        rzlabel.config(text=f"z: {data["orientation"]['z'] * (180/pi)}")
+        angles = euler_from_quaternion(data["orientation"]['x'], data["orientation"]['y'], data["orientation"]['z'], data["orientation"]['w'])
+
+        rxlabel.config(text=f"x: {angles[0] * (180/pi)}")
+        rylabel.config(text=f"y: {angles[1] * (180/pi)}")
+        rzlabel.config(text=f"z: {angles[2] * (180/pi)}")
 
         update_data(data)
 
-        print(data)
+        print(data["orientation"])
 
         
 
