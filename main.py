@@ -1,3 +1,4 @@
+from math import pi
 import tkinter as tk
 
 import PIL
@@ -47,6 +48,17 @@ rlabel.pack()
 rxlabel.pack()
 rylabel.pack()
 rzlabel.pack()
+
+glabel = tk.Label(dataframe, text="Gyro:", font=('Arial', 24))
+gxlabel = tk.Label(dataframe, text="x: 0 Rad/s", font=('Arial', 24))
+gylabel = tk.Label(dataframe, text="y: 0 Rad/s", font=('Arial', 24))
+gzlabel = tk.Label(dataframe, text="z: 0 Rad/s", font=('Arial', 24))
+
+glabel.pack()
+gxlabel.pack()
+gylabel.pack()
+gzlabel.pack()
+
 
 v1label = tk.Label(vframe) 
 v1label.pack()
@@ -101,6 +113,38 @@ anim = FuncAnimation(fig, update_graph, interval=15, blit=True)
 pipeline = depthai.Pipeline()
 
 vio_pipeline = spectacularAI.depthai.Pipeline(pipeline)
+#| 0 -1 0 0.368 |
+#| -1 0 0 0.2 |
+#| 0 0 -1 0.0541 |
+#| 0 0 0 1 |
+
+#Hey Viggy, if you see this then I forgot to put a check here. comment this out
+vio_pipeline.imuToCameraLeft = [
+    [
+        0.9993864566531208,
+        0.002608506818609768,
+        0.03492715205248295,
+        0.004358885459078838
+    ],
+    [
+        0.0033711974751103025,
+        -0.9997567647621044,
+        -0.02179555780417905,
+        0.0002560060614699508
+    ],
+    [
+        0.034861802677196824,
+        0.021899931611508897,
+        -0.9991521644421877,
+        0.0018364413451974568
+    ],
+    [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+    ]
+]
 
 features = []
 image = None
@@ -134,6 +178,8 @@ def onImageFactor(name):
 
 vio_pipeline.hooks.monoPrimary = onImageFactor("Primary")
 
+print(vio_pipeline.imuToCameraLeft)
+
 # def onFeatures(featurebuf):
 #     if type(featurebuf) is not np.ndarray: return
 #     featurebuf[:] = 0
@@ -145,6 +191,25 @@ vio_pipeline.hooks.monoPrimary = onImageFactor("Primary")
     # if cv2.waitKey(1) == ord("q"):
     #     exit(0)
     #
+
+def onImuData(imuData):
+    for imuPacket in imuData.packets:
+        acceleroValues = imuPacket.acceleroMeter
+        gyroValues = imuPacket.gyroscope
+        acceleroTs = acceleroValues.getTimestampDevice().total_seconds() * 1000
+        gyroTs = gyroValues.getTimestampDevice().total_seconds() * 1000
+        imuF = "{:.06f}"
+        tsF  = "{:.03f}"
+        print(f"Accelerometer timestamp: {tsF.format(acceleroTs)} ms")
+        print(f"Accelerometer [m/s^2]: x: {imuF.format(acceleroValues.x)} y: {imuF.format(acceleroValues.y)} z: {imuF.format(acceleroValues.z)}")
+        print(f"Gyroscope timestamp: {tsF.format(gyroTs)} ms")
+        print(f"Gyroscope [rad/s]: x: {imuF.format(gyroValues.x)} y: {imuF.format(gyroValues.y)} z: {imuF.format(gyroValues.z)} ")
+        
+        gxlabel.config(text=f"x: {imuF.format(gyroValues.x)} rad/s")
+        gylabel.config(text=f"y: {imuF.format(gyroValues.y)} rad/s")
+        gzlabel.config(text=f"z: {imuF.format(gyroValues.z)} rad/s")
+
+vio_pipeline.hooks.imu = onImuData
 
 device = depthai.Device(pipeline)
 vio_session = vio_pipeline.startSession(device)
@@ -163,10 +228,12 @@ def camloop():
         tzlabel.config(text=f"z: {data["position"]['z']}")
 
         rxlabel.config(text=f"x: {data["orientation"]['x']}")
-        rylabel.config(text=f"y: {data["orientation"]['y']}")
-        rzlabel.config(text=f"z: {data["orientation"]['z']}")
+        rylabel.config(text=f"y: {data["orientation"]['y'] * (180/pi)}")
+        rzlabel.config(text=f"z: {data["orientation"]['z'] * (180/pi)}")
 
         update_data(data)
+
+        print(data)
 
         
 
