@@ -2,7 +2,6 @@ from math import pi
 import tkinter as tk
 
 import PIL
-from cv2.typing import Scalar
 from mpl_toolkits.mplot3d.art3d import math
 from mpl_toolkits.mplot3d.axes3d import textwrap
 import spectacularAI
@@ -14,7 +13,6 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageTk
-import cv2
 
 
 #UI
@@ -26,7 +24,7 @@ vframe = tk.Frame(window)
 dataframe.pack(side=tk.LEFT)
 vframe.pack()
 
-tlabel = tk.Label(dataframe, font=('Arial', 24))
+tlabel = tk.Label(dataframe, text="awaiting tracking data", font=('Arial', 24))
 tlabel.pack()
 
 tlabel = tk.Label(dataframe, text="Translation:", font=('Arial', 24))
@@ -110,9 +108,13 @@ anim = FuncAnimation(fig, update_graph, interval=15, blit=True)
 #</graph>
 
 #camera
+
+config = spectacularAI.depthai.Configuration()
+config.aprilTagPath = "./tagtest.json"
+
 pipeline = depthai.Pipeline()
 
-vio_pipeline = spectacularAI.depthai.Pipeline(pipeline)
+vio_pipeline = spectacularAI.depthai.Pipeline(pipeline, config)
 #| 0 -1 0 0.368 |
 #| -1 0 0 0.2 |
 #| 0 0 -1 0.0541 |
@@ -247,11 +249,13 @@ def euler_from_quaternion(x, y, z, w):
 def camloop():
     import json
     while True:
+        print(vio_session.hasOutput())
+
         out = vio_session.waitForOutput()
         data = json.loads(out.asJson())
 
-
-        tlabel.config(text=f"Tracking: {data.get('status', "TRACKING")}")
+        # tlabel.config(text=f"Tracking: {data.get('status', "TRACKING")}")
+        tlabel.config(text=f"Tracking: {data.get('status')}")
 
         txlabel.config(text=f"x: {data["position"]['x']}")
         tylabel.config(text=f"y: {data["position"]['y']}")
