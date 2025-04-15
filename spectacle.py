@@ -14,7 +14,7 @@ from wpiutil import wpistruct
 from wpimath.geometry import Pose3d, Rotation3d, Quaternion
 
 def signal_handler(sig, frame):
-  print("Exiting...")
+  print("\nExiting...")
   sys.exit(0)
 
 pipeline = depthai.Pipeline()
