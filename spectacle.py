@@ -46,18 +46,16 @@ if __name__ == "__main__":
   match args.mode:
     case 'test':
       inst.startServer()
-      inst.startClient4("Spectacle")
-      inst.startDSClient()
       print("Test mode, starting NT4 server...")
     case 'sim':
       inst.setServer("localhost")
-      inst.startClient4("Spectacle")
-      inst.startDSClient()
       print("Simulation mode, connecting to localhost NT4 server...")
     case _:
-      inst.startClient4("Spectacle")
-      inst.startDSClient()
       print("Robot mode, connecting to robot NT4 server...")
+
+  # Start NT4 clients
+  inst.startClient4("Spectacle")
+  inst.startDSClient()
 
   # Create NT4 publishers
   statusPub = table.getBooleanTopic("Status").publish()
@@ -70,7 +68,8 @@ if __name__ == "__main__":
   else:
     print("No tag map provided, not using AprilTags!")
 
-   # Init VIO session
+  # Init VIO session
+  config.useVioAutoExposure = True
   vio_pipeline = spectacularAI.depthai.Pipeline(pipeline, config)
   device = depthai.Device(pipeline)
   vio_session = vio_pipeline.startSession(device)
@@ -88,8 +87,8 @@ if __name__ == "__main__":
     status = data.get('status', "TRACKING")
 
     # Get pose
-    quat = Quaternion(data["orientation"]['w'], data["orientation"]['x'], data["orientation"]['y'], data["orientation"]['z'])
-    pose = Pose3d(data["position"]['x'], data["position"]['y'], data["position"]['z'], Rotation3d(quat))
+    quaternion = Quaternion(data["orientation"]['w'], data["orientation"]['x'], data["orientation"]['y'], data["orientation"]['z'])
+    pose = Pose3d(data["position"]['x'], data["position"]['y'], data["position"]['z'], Rotation3d(quaternion))
 
     # Publish pose
     statusPub.set(status == "TRACKING")
