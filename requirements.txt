@@ -1,0 +1,9 @@
+opencv-python
+matplotlib
+depthai
+spectacularAI
+numpy
+Pillow
+pyntcore1
+robotpy-wpiutil
+robotpy-wpimath
