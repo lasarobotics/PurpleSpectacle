@@ -71,7 +71,7 @@ fig.add_axes(ax)
 
 data = { c: [] for c in 'xyz' }
 
-ax_bounds = (-3, 3) # meters
+ax_bounds = (-4, 4) # meters
 ax.set(xlim=ax_bounds, ylim=ax_bounds, zlim=ax_bounds)
 ax.view_init(azim=-140) # initial plot orientation
 vio_plot = ax.plot(
@@ -114,7 +114,7 @@ anim = FuncAnimation(fig, update_graph, interval=15, blit=True)
 
 config = spectacularAI.depthai.Configuration()
 config.aprilTagPath = "./tagtest.json"
-
+#
 pipeline = depthai.Pipeline()
 
 vio_pipeline = spectacularAI.depthai.Pipeline(pipeline, config)
