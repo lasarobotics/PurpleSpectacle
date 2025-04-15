@@ -1,5 +1,8 @@
-from math import pi
+#!/usr/bin/env python
+
 import tkinter as tk
+
+from math import pi
 
 import PIL
 from mpl_toolkits.mplot3d.art3d import math
@@ -16,7 +19,7 @@ from PIL import Image, ImageTk
 
 
 #UI
-window = tk.Tk() 
+window = tk.Tk()
 dataframe = tk.Frame(window)
 vframe = tk.Frame(window)
 # iframe = tk.Frame(window)
@@ -27,7 +30,7 @@ vframe.pack()
 tlabel = tk.Label(dataframe, text="awaiting tracking data", font=('Arial', 24))
 tlabel.pack()
 
-tlabel = tk.Label(dataframe, text="Translation:", font=('Arial', 24))
+tlabel = tk.Label(dataframe, text="  Translation: ", font=('Arial', 24))
 txlabel = tk.Label(dataframe, text="x: 0", font=('Arial', 24))
 tylabel = tk.Label(dataframe, text="y: 0", font=('Arial', 24))
 tzlabel = tk.Label(dataframe, text="z: 0", font=('Arial', 24))
@@ -58,7 +61,7 @@ gylabel.pack()
 gzlabel.pack()
 
 
-v1label = tk.Label(vframe) 
+v1label = tk.Label(vframe)
 v1label.pack()
 
 #<graph>
@@ -184,7 +187,7 @@ def onImageFactor(name):
             v1label.config(image=image)
 
         image.paste(new)
-        
+
     return onImage
 
 vio_pipeline.hooks.monoPrimary = onImageFactor("Primary")
@@ -234,16 +237,16 @@ def euler_from_quaternion(x, y, z, w):
         t0 = +2.0 * (w * x + y * z)
         t1 = +1.0 - 2.0 * (x * x + y * y)
         roll_x = math.atan2(t0, t1)
-     
+
         t2 = +2.0 * (w * y - z * x)
         t2 = +1.0 if t2 > +1.0 else t2
         t2 = -1.0 if t2 < -1.0 else t2
         pitch_y = math.asin(t2)
-     
+
         t3 = +2.0 * (w * z + x * y)
         t4 = +1.0 - 2.0 * (y * y + z * z)
         yaw_z = math.atan2(t3, t4)
-     
+
         return roll_x, pitch_y, yaw_z # in radians
 
 def camloop():
@@ -257,23 +260,24 @@ def camloop():
         # tlabel.config(text=f"Tracking: {data.get('status', "TRACKING")}")
         tlabel.config(text=f"Tracking: {data.get('status')}")
 
-        txlabel.config(text=f"x: {data["position"]['x']}")
-        tylabel.config(text=f"y: {data["position"]['y']}")
-        tzlabel.config(text=f"z: {data["position"]['z']}")
+        txlabel.config(text=f"x: {round(data["position"]['x'], 3)}")
+        tylabel.config(text=f"y: {round(data["position"]['y'], 3)}")
+        tzlabel.config(text=f"z: {round(data["position"]['z'], 3)}")
 
         angles = euler_from_quaternion(data["orientation"]['x'], data["orientation"]['y'], data["orientation"]['z'], data["orientation"]['w'])
 
-        rxlabel.config(text=f"x: {angles[0] * (180/pi)}")
-        rylabel.config(text=f"y: {angles[1] * (180/pi)}")
-        rzlabel.config(text=f"z: {angles[2] * (180/pi)}")
+        rxlabel.config(text=f"x: {round(angles[0] * (180/pi))}")
+        rylabel.config(text=f"y: {round(angles[1] * (180/pi))}")
+        rzlabel.config(text=f"z: {round(angles[2] * (180/pi))}")
 
         update_data(data)
 
         print(data["orientation"])
 
-        
 
-    
+
+
+
 thread = threading.Thread(target=camloop)
 # threads.append(thread)
 thread.start()
