@@ -46,6 +46,8 @@ if __name__ == "__main__":
   match args.mode:
     case 'test':
       inst.startServer()
+      inst.startClient4("Spectacle")
+      inst.startDSClient()
       print("Test mode, starting NT4 server...")
     case 'sim':
       inst.setServer("localhost")
@@ -58,9 +60,8 @@ if __name__ == "__main__":
       print("Robot mode, connecting to robot NT4 server...")
 
   # Create NT4 publishers
-  statusPub = table.getBooleanTopic("status").publish()
-  posePub = table.getStructTopic("pose", Pose3d).publish()
-
+  statusPub = table.getBooleanTopic("Status").publish()
+  posePub = table.getStructTopic("Pose", Pose3d).publish()
 
   # Set tag map path
   if args.tag_map:
