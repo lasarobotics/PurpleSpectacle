@@ -4,6 +4,6 @@ depthai
 spectacularAI
 numpy
 Pillow
-pyntcore1
+pyntcore
 robotpy-wpiutil
 robotpy-wpimath
