@@ -69,9 +69,46 @@ if __name__ == "__main__":
     print("No tag map provided, not using AprilTags!")
 
   # Init VIO session
-  config.useVioAutoExposure = True
+  # config.useVioAutoExposure = True
   vio_pipeline = spectacularAI.depthai.Pipeline(pipeline, config)
   device = depthai.Device(pipeline)
+
+  calib = device.readCalibration()
+  eeprom = calib.getEepromData()
+
+  pname = eeprom.productName
+  print(pname)
+
+  #check for oak d lite, spectacular does not support by default so we need to do some extra work.
+  if pname == "OAK-D-LITE":
+      vio_pipeline.imuToCameraLeft = [
+          [
+              0.9993864566531208,
+              0.002608506818609768,
+              0.03492715205248295,
+              0.004358885459078838
+          ],
+          [
+              0.0033711974751103025,
+              -0.9997567647621044,
+              -0.02179555780417905,
+              0.0002560060614699508
+          ],
+          [
+              0.034861802677196824,
+              0.021899931611508897,
+              -0.9991521644421877,
+              0.0018364413451974568
+          ],
+          [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+          ]
+      ]
+      print("Using Oak D lite imu matrix")
+
   vio_session = vio_pipeline.startSession(device)
   print("VIO session initialized.")
 
