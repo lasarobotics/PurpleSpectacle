@@ -7,3 +7,4 @@ Pillow
 pyntcore
 robotpy-wpiutil
 robotpy-wpimath
+robotpy-apriltag
