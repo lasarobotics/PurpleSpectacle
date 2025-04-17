@@ -5,9 +5,11 @@ import time
 import json
 import signal
 import argparse
+import os
 
 import depthai
 import spectacularAI
+import cv2
 
 import ntcore
 from wpiutil import wpistruct
@@ -42,6 +44,7 @@ if __name__ == "__main__":
   # Add arguments
   parser.add_argument("--mode", required=True, choices=['test', 'sim', 'robot'], help="select script mode")
   parser.add_argument("--tag-map", help="path to AprilTag map JSON file")
+  parser.add_argument('--map', action="store_true")
 
   # Parse arguments
   args = parser.parse_args()
@@ -75,6 +78,10 @@ if __name__ == "__main__":
     print("Using tag map at " + args.tag_map)
   else:
     print("No tag map provided, not using AprilTags!")
+
+  if args.map:
+    print("Mapping")
+    config.mapSavePath = 'slam_map._'
 
   # Init VIO session
   # config.useVioAutoExposure = True
@@ -137,8 +144,8 @@ if __name__ == "__main__":
     # Check if tracking
     status = data.get('status', "TRACKING")
 
-    # Get pose
-    quaternion = Quaternion(data["orientation"]['w'], data["orientation"]['x'], data["orientation"]['y'], data["orientation"]['z'])
+    # Get pose, #messed with rotation axises a bit to try and make wpilib see it like it is.
+    quaternion = Quaternion(data["orientation"]['w'], data["orientation"]['y'], data["orientation"]['x'], data["orientation"]['z'])
     pose = Pose3d(data["position"]['x'], data["position"]['y'], data["position"]['z'], Rotation3d(quaternion))
 
     # Publish pose
