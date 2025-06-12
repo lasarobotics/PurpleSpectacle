@@ -3,6 +3,7 @@ matplotlib
 depthai
 spectacularAI
 numpy
+numpyencoder
 Pillow
 pyntcore
 robotpy-wpiutil
