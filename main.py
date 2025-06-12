@@ -147,7 +147,7 @@ if __name__ ==  "__main__":
         spectacle.config["MappingMode"] = True
 
     # Start NT4 clients
-    nt_instance.startClient4("Spectacle")
+    nt_instance.startClient4("PurpleSpectacle")
     nt_instance.startDSClient()
 
     # Create NT4 output publishers
