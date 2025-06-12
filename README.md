@@ -1,4 +1,4 @@
-# Spectacle
+# PurpleSpectacle
 ---
 
 A simple application that uses Spectacular AI to do VIO/VSLAM with Luxonis OAK-D stereo cameras
