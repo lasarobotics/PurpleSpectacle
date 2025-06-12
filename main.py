@@ -106,13 +106,16 @@ if __name__ ==  "__main__":
     parser.add_argument("--mode", required=True, choices=["test", "sim", "robot"], help="select script mode")
     parser.add_argument("--tag-map", help="path to AprilTag map JSON file")
     parser.add_argument("--map", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
 
     # Parse arguments
     args = parser.parse_args()
 
     # Configure logging
+    loglevel = logging.INFO
+    if args.verbose: loglevel = logging.DEBUG
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=loglevel,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
