@@ -1,9 +1,0 @@
-[package]
-name = "frc_to_spectacular_fmap"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-anyhow = "1.0.97"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"

@@ -1,12 +1,9 @@
-A visualizer for spectacular ai on oakd cameras.
+# Spectacle
+---
 
-I'm very early and testing, and the code is quite janky since I did it all in a morning.
+A simple application that uses Spectacular AI to do VIO/VSLAM with Luxonis OAK-D stereo cameras
 
-Deps: 
-opevcv
-matplotlib
-depthai
-Pillow
-spectacularai
-numpy
-(might have missed one, in a hurry right now)
+## Usage
+Install python (>3.12.x)
+Install requirements
+Run `./main.py`

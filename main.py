@@ -1,287 +1,182 @@
 #!/usr/bin/env python
 
-import tkinter as tk
-
-from math import pi
-
-import PIL
-from mpl_toolkits.mplot3d.art3d import math
-from mpl_toolkits.mplot3d.axes3d import textwrap
-import spectacularAI
-import depthai
+import os
+import sys
+import time
+import json
+import signal
+import logging
+import argparse
 import threading
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg)
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image, ImageTk
 
+import ntcore
+from wpiutil import wpistruct
+from wpimath.geometry import Pose3d, Rotation3d, Quaternion
 
-#UI
-window = tk.Tk()
-dataframe = tk.Frame(window)
-vframe = tk.Frame(window)
-# iframe = tk.Frame(window)
+import spectacle
 
-dataframe.pack(side=tk.LEFT)
-vframe.pack()
+global spectacular_thread
+global nt_listener_handles
 
-tlabel = tk.Label(dataframe, text="awaiting tracking data", font=('Arial', 24))
-tlabel.pack()
+global status_publisher
+global pose_publisher
+global stop_event
 
-tlabel = tk.Label(dataframe, text="  Translation: ", font=('Arial', 24))
-txlabel = tk.Label(dataframe, text="x: 0", font=('Arial', 24))
-tylabel = tk.Label(dataframe, text="y: 0", font=('Arial', 24))
-tzlabel = tk.Label(dataframe, text="z: 0", font=('Arial', 24))
+epilog = """
+Modes:
+test: Run a NT4 server for debugging
+sim: Connect to simulation NT4 server
+robot: Connect to robot NT4 server
+"""
 
-tlabel.pack()
-txlabel.pack()
-tylabel.pack()
-tzlabel.pack()
+def signal_handler(sig, frame):
+    logging.info("Exiting...")
+    nt_instance = ntcore.NetworkTableInstance.getDefault()
+    for listener_handle in nt_listener_handles:
+        nt_instance.removeListener(listener_handle)
+    stop_event.set()
+    spectacular_thread.join()
+    time.sleep(1)
+    sys.exit(0)
 
-rlabel = tk.Label(dataframe, text="Rotation:", font=('Arial', 24))
-rxlabel = tk.Label(dataframe, text="x: 0", font=('Arial', 24))
-rylabel = tk.Label(dataframe, text="y: 0", font=('Arial', 24))
-rzlabel = tk.Label(dataframe, text="z: 0", font=('Arial', 24))
+def start_spectacular():
+    """Start Spectacular AI session
+    """
 
-rlabel.pack()
-rxlabel.pack()
-rylabel.pack()
-rzlabel.pack()
+    stop_event.clear()
+    spectacular_thread = threading.Thread(target=spectacular_session, args=(stop_event, status_publisher, pose_publisher))
+    spectacular_thread.start()
 
-glabel = tk.Label(dataframe, text="Gyro:", font=('Arial', 24))
-gxlabel = tk.Label(dataframe, text="x: 0 Rad/s", font=('Arial', 24))
-gylabel = tk.Label(dataframe, text="y: 0 Rad/s", font=('Arial', 24))
-gzlabel = tk.Label(dataframe, text="z: 0 Rad/s", font=('Arial', 24))
+def on_config_change(event: ntcore.Event):
+    """NT4 config change callback
 
-glabel.pack()
-gxlabel.pack()
-gylabel.pack()
-gzlabel.pack()
+    Stops Spectacular AI session, updates config, and restarts session
 
+    Args:
+        event (ntcore.Event): NT4 event
+    """
 
-v1label = tk.Label(vframe)
-v1label.pack()
+    # Stop Spectacular
+    stop_event.set()
+    spectacular_thread.join()
+    time.sleep(1)
 
-#<graph>
-fig = plt.figure()
-ax = Axes3D(fig)
-fig.add_axes(ax)
+    # Get data
+    data_type = event.data.topic.getType()
+    topic_name = event.data.topic.getName().split("/")[-1]
+    match data_type:
+        case ntcore.NetworkTableType.kBoolean:
+            spectacle.config[topic_name] = event.data.value.getBoolean()
+        case ntcore.NetworkTableType.kBooleanArray:
+            spectacle.config[topic_name] = event.data.value.getBooleanArray()
+        case ntcore.NetworkTableType.kDouble:
+            spectacle.config[topic_name] = event.data.value.getDouble()
+        case ntcore.NetworkTableType.kDoubleArray:
+            spectacle.config[topic_name] = event.data.value.getDoubleArray()
+        case ntcore.NetworkTableType.kInteger:
+            spectacle.config[topic_name] = event.data.value.getInteger()
+        case ntcore.NetworkTableType.kIntegerArray:
+            spectacle.config[topic_name] = event.data.value.getIntegerArray()
+        case ntcore.NetworkTableType.kRaw:
+            spectacle.config[topic_name] = event.data.value.getRaw()
+        case ntcore.NetworkTableType.kString:
+            spectacle.config[topic_name] = event.data.value.getString()
+        case ntcore.NetworkTableType.kStringArray:
+            spectacle.config[topic_name] = event.data.value.getStringArray()
+        case _:
+            logging.exception("Unsupported config data type!")
 
-data = { c: [] for c in 'xyz' }
+    # Restart Spectacular pipeline
+    start_spectacular()
 
-ax_bounds = (-4, 4) # meters
-ax.set(xlim=ax_bounds, ylim=ax_bounds, zlim=ax_bounds)
-ax.view_init(azim=-140) # initial plot orientation
-vio_plot = ax.plot(
-    xs=[], ys=[], zs=[],
-    linestyle="-",
-    marker=""
-)
-ax.set_xlabel("x (m)")
-ax.set_ylabel("y (m)")
-ax.set_zlabel("z (m)")
+# Main function
+if __name__ ==  "__main__":
+    # Bind SIGINT handler
+    signal.signal(signal.SIGINT, signal_handler)
 
-title = ax.set_title("VIO trajectory")
-canvas = FigureCanvasTkAgg(fig, master=vframe)  # A tk.DrawingArea.
-canvas.draw()
-canvas.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    # Init argparse
+    parser = argparse.ArgumentParser(
+        prog="Spectacle",
+        description="Publish pose data from Spectacular AI",
+        epilog=epilog,
+        formatter_class=argparse.RawTextHelpFormatter
+    )
 
+    # Add arguments
+    parser.add_argument("--mode", required=True, choices=["test", "sim", "robot"], help="select script mode")
+    parser.add_argument("--tag-map", help="path to AprilTag map JSON file")
+    parser.add_argument("--map", action="store_true")
 
-def update_data(vio_out):
-        # supports two slightly different JSONL formats
-        if 'pose' in vio_out: vio_out = vio_out['pose']
-        # SDK < 0.12 does not expose the TRACKING status
-        is_tracking = vio_out.get('status', 'TRACKING') == 'TRACKING'
-        for c in 'xyz':
-            val = vio_out['position'][c]
-            if not is_tracking: val = np.nan
-            data[c].append(val)
-        return True
+    # Parse arguments
+    args = parser.parse_args()
 
-def update_graph(frames):
-        x, y, z = [np.array(data[c]) for c in 'xyz']
-        vio_plot[0].set_data(x, y)
-        vio_plot[0].set_3d_properties(z)
-        return (vio_plot[0],)
+    # Configure logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 
-from matplotlib.animation import FuncAnimation
-anim = FuncAnimation(fig, update_graph, interval=15, blit=True)
-#</graph>
+    # Init NT4
+    nt_instance = ntcore.NetworkTableInstance.getDefault()
+    spectacle_nt = nt_instance.getTable("Spectacle")
 
-#camera
+    # Start NT4 server/client
+    match args.mode:
+        case 'test':
+            nt_instance.startServer()
+            logging.info("Test mode, starting NT4 server...")
+        case 'sim':
+            nt_instance.setServer("localhost")
+            logging.info("Simulation mode, connecting to localhost NT4 server...")
+        case _:
+            logging.info("Robot mode, connecting to robot NT4 server...")
 
-config = spectacularAI.depthai.Configuration()
-config.aprilTagPath = "./tagtest.json"
-#
-pipeline = depthai.Pipeline()
+    # Set tag map path
+    if args.tag_map:
+        spectacle.config["AprilTagMapPath"] = args.tag_map
+        logging.info("Using AprilTag map at " + args.tag_map)
+    else:
+        logging.info("No AprilTag map provided, not using AprilTags!")
 
-vio_pipeline = spectacularAI.depthai.Pipeline(pipeline, config)
-#| 0 -1 0 0.368 |
-#| -1 0 0 0.2 |
-#| 0 0 -1 0.0541 |
-#| 0 0 0 1 |
+    # Enable mapping mode
+    if args.map:
+        logging.info("Mapping environment...")
+        spectacle.config["MappingMode"] = True
 
-device = depthai.Device(pipeline)
-calib = device.readCalibration()
-eeprom = calib.getEepromData()
+    # Start NT4 clients
+    nt_instance.startClient4("Spectacle")
+    nt_instance.startDSClient()
 
-pname = eeprom.productName
-print(pname)
+    # Create NT4 output publishers
+    status_publisher = spectacle_nt.getBooleanTopic("Status").publish(ntcore.PubSubOptions(keepDuplicates=True, sendAll=True))
+    pose_publisher = spectacle_nt.getStructTopic("Pose", Pose3d).publish(ntcore.PubSubOptions(keepDuplicates=True, sendAll=True))
 
-#check for oak d lite, spectacular does not support by default so we need to do some extra work.
-if pname == "OAK-D-LITE":
-    vio_pipeline.imuToCameraLeft = [
-        [
-            0.9993864566531208,
-            0.002608506818609768,
-            0.03492715205248295,
-            0.004358885459078838
-        ],
-        [
-            0.0033711974751103025,
-            -0.9997567647621044,
-            -0.02179555780417905,
-            0.0002560060614699508
-        ],
-        [
-            0.034861802677196824,
-            0.021899931611508897,
-            -0.9991521644421877,
-            0.0018364413451974568
-        ],
-        [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-        ]
-    ]
-    print("Using Oak D lite imu matrix")
+    # Create NT4 config entries
+    topics = list(spectacle.config.keys())
+    auto_exposure_entry = spectacle_nt.getBooleanTopic(topics[0]).getEntry(spectacle.config[topics[0]])
+    auto_exposure_entry.setDefault(spectacle.config[topics[0]])
+    dot_projector_intensity_entry = spectacle_nt.getDoubleTopic(topics[1]).getEntry(spectacle.config[topics[1]])
+    dot_projector_intensity_entry.setDefault(spectacle.config[topics[1]])
+    ir_floodlight_intensity_entry = spectacle_nt.getDoubleTopic(topics[2]).getEntry(spectacle.config[topics[2]])
+    ir_floodlight_intensity_entry.setDefault(spectacle.config[topics[2]])
+    apriltag_map_path_entry = spectacle_nt.getStringTopic(topics[3]).getEntry(spectacle.config[topics[3]])
+    apriltag_map_path_entry.setDefault(spectacle.config[topics[3]])
+    mapping_mode_entry = spectacle_nt.getBooleanTopic(topics[4]).getEntry(spectacle.config[topics[4]])
+    mapping_mode_entry.setDefault(spectacle.config[topics[4]])
 
-features = []
-image = None
+    # Bind listener callback to subscribers
+    nt_listener_handles = []
+    nt_listener_handles.append(nt_instance.addListener(auto_exposure_entry, ntcore.EventFlags.kValueAll, on_config_change))
+    nt_listener_handles.append(nt_instance.addListener(dot_projector_intensity_entry, ntcore.EventFlags.kValueAll, on_config_change))
+    nt_listener_handles.append(nt_instance.addListener(ir_floodlight_intensity_entry, ntcore.EventFlags.kValueAll, on_config_change))
+    nt_listener_handles.append(nt_instance.addListener(apriltag_map_path_entry, ntcore.EventFlags.kValueAll, on_config_change))
+    nt_listener_handles.append(nt_instance.addListener(mapping_mode_entry, ntcore.EventFlags.kValueAll, on_config_change))
 
-# def updateImage():
-#     image
-#     v1label.config(image=todo)
-#
+    # Start Spectacular AI for first time
+    stop_event = threading.Event()
+    spectacular_thread = threading.Thread(target=spectacle.spectacular_session, args=(stop_event, status_publisher, pose_publisher))
+    spectacular_thread.start()
 
-def onImageFactor(name):
-    def onImage(img):
-        if img.getWidth() <= 0 or img.getHeight() <= 0:
-            # When SLAM is enabled, monocular frames are only used at 1/6th of normal frame rate,
-            # rest of the frames are [0,0] in size and must be filtered
-            return
-
-        new = Image.fromarray(img.getCvFrame())
-
-        if img != ImageTk.PhotoImage:
-            global image
-            image = ImageTk.PhotoImage(new)
-            v1label.config(image=image)
-
-        if (image.width() != new.width):
-            print("imconfig change")
-            v1label.config(image=image)
-
-        image.paste(new)
-
-    return onImage
-
-vio_pipeline.hooks.monoPrimary = onImageFactor("Primary")
-
-print(vio_pipeline.imuToCameraLeft)
-
-# def onFeatures(featurebuf):
-#     if type(featurebuf) is not np.ndarray: return
-#     featurebuf[:] = 0
-#     features = featurebuf
-#
-    # for feature in features.trackedFeatures:
-    #     cv2.circle(features, (int(feature.position.x), int(feature.position.y)), 2, , -1, cv2.LINE_AA, 0)
-    # cv2.imshow("Features", featureBuffer)
-    # if cv2.waitKey(1) == ord("q"):
-    #     exit(0)
-    #
-
-def onImuData(imuData):
-    for imuPacket in imuData.packets:
-        acceleroValues = imuPacket.acceleroMeter
-        gyroValues = imuPacket.gyroscope
-        acceleroTs = acceleroValues.getTimestampDevice().total_seconds() * 1000
-        gyroTs = gyroValues.getTimestampDevice().total_seconds() * 1000
-        imuF = "{:.06f}"
-        tsF  = "{:.03f}"
-        # print(f"Accelerometer timestamp: {tsF.format(acceleroTs)} ms")
-        # print(f"Accelerometer [m/s^2]: x: {imuF.format(acceleroValues.x)} y: {imuF.format(acceleroValues.y)} z: {imuF.format(acceleroValues.z)}")
-        # print(f"Gyroscope timestamp: {tsF.format(gyroTs)} ms")
-        # print(f"Gyroscope [rad/s]: x: {imuF.format(gyroValues.x)} y: {imuF.format(gyroValues.y)} z: {imuF.format(gyroValues.z)} ")
-        #
-        gxlabel.config(text=f"x: {imuF.format(gyroValues.x)} rad/s")
-        gylabel.config(text=f"y: {imuF.format(gyroValues.y)} rad/s")
-        gzlabel.config(text=f"z: {imuF.format(gyroValues.z)} rad/s")
-
-vio_pipeline.hooks.imu = onImuData
-
-vio_session = vio_pipeline.startSession(device)
-
-def euler_from_quaternion(x, y, z, w):
-        """
-        Convert a quaternion into euler angles (roll, pitch, yaw)
-        roll is rotation around x in radians (counterclockwise)
-        pitch is rotation around y in radians (counterclockwise)
-        yaw is rotation around z in radians (counterclockwise)
-        """
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + y * y)
-        roll_x = math.atan2(t0, t1)
-
-        t2 = +2.0 * (w * y - z * x)
-        t2 = +1.0 if t2 > +1.0 else t2
-        t2 = -1.0 if t2 < -1.0 else t2
-        pitch_y = math.asin(t2)
-
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (y * y + z * z)
-        yaw_z = math.atan2(t3, t4)
-
-        return roll_x, pitch_y, yaw_z # in radians
-
-def camloop():
-    import json
+    # Stay running
     while True:
-        print(vio_session.hasOutput())
-
-        out = vio_session.waitForOutput()
-        data = json.loads(out.asJson())
-
-        # tlabel.config(text=f"Tracking: {data.get('status', "TRACKING")}")
-        tlabel.config(text=f"Tracking: {data.get('status')}")
-
-        txlabel.config(text=f"x: {round(data["position"]['x'], 3)}")
-        tylabel.config(text=f"y: {round(data["position"]['y'], 3)}")
-        tzlabel.config(text=f"z: {round(data["position"]['z'], 3)}")
-
-        angles = euler_from_quaternion(data["orientation"]['x'], data["orientation"]['y'], data["orientation"]['z'], data["orientation"]['w'])
-
-        rxlabel.config(text=f"x: {round(angles[0] * (180/pi))}")
-        rylabel.config(text=f"y: {round(angles[1] * (180/pi))}")
-        rzlabel.config(text=f"z: {round(angles[2] * (180/pi))}")
-
-        update_data(data)
-
-        print(data["orientation"])
-
-
-
-
-
-thread = threading.Thread(target=camloop)
-# threads.append(thread)
-thread.start()
-
-window.mainloop()
-thread.join()
-
+        time.sleep(0.2)
